@@ -4,69 +4,69 @@ const allRows = fs.readFileSync("./big.txt").toString().split("\n");
 const header = allRows.shift();
 const columns = header.split("|");
 const TOTAL = "$total";
-
+const ROW_SEPARATOR = "|";
 const propertiesIndexes = columns
-  .map((p, i) => [p, i])
-  .filter(([p, i]) => /^property[0-9]+$/.test(p))
-  .map(([p, i]) => i);
+  .map((c, i) => [c, i])
+  .filter(([c, i]) => c.match(/property[\d]/))
+  .map(([c, i]) => i);
 
-class HierarchyTree {
-  constructor() {
-    this.data = { children: {} };
-  }
-
-  addRow(row, getSortValueFn) {
-    let splittedRow = row.split("|");
-    let rowObj = {};
-    for (let i = 0; i < columns.length; i++) {
-      rowObj[columns[i]] = splittedRow[i];
+class Row {
+  constructor(rowData, getSortValueFn) {
+    this.data = rowData;
+    this.splitted = rowData.split(ROW_SEPARATOR);
+    for (let i = 0; i < this.splitted.length; i++) {
+      this[columns[i]] = this.splitted[i];
     }
-
-    let currNode = this.data;
-    for (const propertyIndex of propertiesIndexes) {
-      const nodeKey = splittedRow[propertyIndex];
-      if (nodeKey === TOTAL) {
-        currNode.value = parseFloat(getSortValueFn(rowObj));
-        currNode.row = row;
-        return;
-      } else {
-        if (!currNode.children[nodeKey]) {
-          currNode.children[nodeKey] = { children: {} };
-        }
-        currNode = currNode.children[nodeKey];
-      }
-    }
-    currNode.value = parseFloat(getSortValueFn(rowObj));
-    currNode.row = row;
+    this.value = +getSortValueFn(this);
   }
 }
 
-const buildTree = (rows, getSortValueFn) => {
-  const tree = new HierarchyTree();
-  rows.forEach((sr) => tree.addRow(sr, getSortValueFn));
-  return tree.data;
-};
+class Tree {
+  constructor() {
+    this.data = { nodes: {} };
+  }
 
-const reconstructTree = (root, path) => {
-  if (root?.value !== undefined) {
-    const currNode = root.row;
-    return [
-      currNode,
-      ...Object.entries(root.children)
-        .sort(([_, { value: value1 }], [_1, { value: value2 }]) => {
-          return value2 - value1;
-        })
-        .flatMap(([key, childNode]) => {
-          return reconstructTree(childNode, [...path, key]);
-        }),
-    ];
+  insertNode(row) {
+    let currNode = this.data;
+    for (const index of propertiesIndexes) {
+      const nodeKey = row.splitted[index];
+      if (nodeKey === TOTAL) {
+        currNode.value = row.value;
+        currNode.row = row.data;
+        return;
+      } else {
+        if (!currNode.nodes[nodeKey]) {
+          currNode.nodes[nodeKey] = { nodes: {} };
+        }
+        currNode = currNode.nodes[nodeKey];
+      }
+    }
+    currNode.value = row.value;
+    currNode.row = row.data;
+  }
+}
+
+const getSortedRows = (root) => {
+  if (root.nodes) {
+    let sortedRows = [];
+    const sortedNodes = Object.values(root.nodes).sort(
+      (nodeA, nodeB) => nodeB.value - nodeA.value
+    );
+    for (const node of sortedNodes) {
+      sortedRows.push(getSortedRows(node));
+    }
+    return [root.row, ...sortedRows.flatMap((x) => x)];
   }
   return [];
 };
 
 const hierarchicalSort = (rows, getSortValueFn) => {
-  const tree = buildTree(rows, getSortValueFn);
-  const sortedRows = reconstructTree(tree, []);
+  const tree = new Tree();
+  for (const row of rows) {
+    const r = new Row(row, getSortValueFn);
+    tree.insertNode(r);
+  }
+  const sortedRows = getSortedRows(tree.data);
   sortedRows.unshift(header);
   fs.writeFileSync("./output.txt", sortedRows.join("\n"));
 };
