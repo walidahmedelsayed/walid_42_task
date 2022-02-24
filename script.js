@@ -1,10 +1,10 @@
 const fs = require("fs");
 
 const allRows = fs.readFileSync("./big.txt").toString().split("\n");
-const header = allRows.shift();
-const columns = header.split("|");
-const TOTAL = "$total";
 const ROW_SEPARATOR = "|";
+const header = allRows.shift();
+const columns = header.split(ROW_SEPARATOR);
+const TOTAL = "$total";
 const propertiesIndexes = columns
   .map((c, i) => [c, i])
   .filter(([c, i]) => c.match(/property[\d]/))
